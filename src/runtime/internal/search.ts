@@ -4,7 +4,7 @@ import type { MinimarkTree } from 'minimark'
 import { pick } from './utils'
 import type { CollectionQueryBuilder, PageCollectionItemBase } from '~/src/types'
 
-type Section = {
+export type Section = {
   // Path to the section
   id: string
   // Title of the section
@@ -27,24 +27,36 @@ interface SectionablePage {
   body: MDCRoot | MinimarkTree
 }
 
-export type GenerateSearchSectionsOptions = {
+export type GenerateSearchSectionsOptions<T = PageCollectionItemBase, K extends keyof T = never> = {
   ignoredTags?: string[]
-  extraFields?: (string | symbol | number)[]
+  extraFields?: K[]
   minHeading?: `h${1 | 2 | 3 | 4 | 5 | 6}`
   maxHeading?: `h${1 | 2 | 3 | 4 | 5 | 6}`
 }
 
-export async function generateSearchSections<T extends PageCollectionItemBase>(queryBuilder: CollectionQueryBuilder<T>, opts?: GenerateSearchSectionsOptions) {
+export async function generateSearchSections<T extends PageCollectionItemBase, K extends keyof T = never>(
+  queryBuilder: CollectionQueryBuilder<T>, 
+  opts?: GenerateSearchSectionsOptions<T, K>
+): Promise<Array<Section & Pick<T, K>>> {
   const { ignoredTags = [], extraFields = [], minHeading = 'h1', maxHeading = 'h6' } = opts || {}
   const minLevel = headingLevel(minHeading)
   const maxLevel = headingLevel(maxHeading)
 
+  // Select base fields plus extra fields
+  type BaseFields = 'path' | 'body' | 'description' | 'title'
   const documents = await queryBuilder
     .where('extension', '=', 'md')
-    .select('path', 'body', 'description', 'title', ...(extraFields as Array<keyof T> || []))
-    .all()
+    .select('path' as keyof T, 'body' as keyof T, 'description' as keyof T, 'title' as keyof T, ...(extraFields as K[]))
+    .all() as Array<Pick<T, BaseFields> & Pick<T, K>>
 
-  return documents.flatMap(doc => splitPageIntoSections(doc, { ignoredTags, extraFields: extraFields as string[], minLevel, maxLevel }))
+  return documents.flatMap(doc => 
+    splitPageIntoSections(doc as unknown as SectionablePage & Pick<T, K>, { 
+      ignoredTags, 
+      extraFields: extraFields as string[], 
+      minLevel, 
+      maxLevel 
+    })
+  ) as Array<Section & Pick<T, K>>
 }
 
 function splitPageIntoSections(page: SectionablePage, { ignoredTags, extraFields, minLevel, maxLevel }: { ignoredTags: string[], extraFields: Array<string>, minLevel: number, maxLevel: number }) {

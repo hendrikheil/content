@@ -272,6 +272,48 @@ describe('generateSearchSections', () => {
       },
     ])
   })
+
+  it('should properly type extra fields for type inference', async () => {
+    interface TestPage extends PageCollectionItemBase {
+      author: string
+      publishDate: string
+      tags: string[]
+    }
+
+    const mockQueryBuilder = createMockQueryBuilder([{
+      path: '/test',
+      title: 'Test Page',
+      description: 'Page description',
+      author: 'John Doe',
+      publishDate: '2024-01-01',
+      tags: ['typescript', 'testing'],
+      body: {
+        type: 'root',
+        children: [
+          {
+            type: 'element',
+            tag: 'h2',
+            props: { id: 'section-1' },
+            children: [{ type: 'text', value: 'Section 1' }],
+          },
+        ],
+      },
+    }]) as unknown as CollectionQueryBuilder<TestPage>
+
+    const sections = await generateSearchSections<TestPage, 'author' | 'publishDate'>(
+      mockQueryBuilder, 
+      { extraFields: ['author', 'publishDate'] }
+    )
+
+    // Type check: sections should have author and publishDate properties
+    expect(sections[0]).toHaveProperty('author')
+    expect(sections[0]).toHaveProperty('publishDate')
+    expect(sections[0].author).toBe('John Doe')
+    expect(sections[0].publishDate).toBe('2024-01-01')
+    
+    // Should not have tags since we didn't include it
+    expect(sections[0]).not.toHaveProperty('tags')
+  })
 })
 
 function createMockQueryBuilder(result: unknown[]) {
