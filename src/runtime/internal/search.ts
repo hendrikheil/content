@@ -43,23 +43,22 @@ export async function generateSearchSections<T extends PageCollectionItemBase, K
   const maxLevel = headingLevel(maxHeading)
 
   // Select base fields plus extra fields
-  type BaseFields = 'path' | 'body' | 'description' | 'title'
+  // Using 'as keyof T' because TypeScript doesn't automatically know these PageCollectionItemBase
+  // fields exist on T, even though T extends PageCollectionItemBase
   const documents = await queryBuilder
     .where('extension', '=', 'md')
     .select('path' as keyof T, 'body' as keyof T, 'description' as keyof T, 'title' as keyof T, ...(extraFields as K[]))
-    .all() as Array<Pick<T, BaseFields> & Pick<T, K>>
+    .all()
 
   return documents.flatMap(doc => 
-    splitPageIntoSections(doc as unknown as SectionablePage & Pick<T, K>, { 
-      ignoredTags, 
-      extraFields: extraFields as string[], 
-      minLevel, 
-      maxLevel 
-    })
+    splitPageIntoSections(doc, { ignoredTags, extraFields: extraFields as string[], minLevel, maxLevel })
   ) as Array<Section & Pick<T, K>>
 }
 
-function splitPageIntoSections(page: SectionablePage, { ignoredTags, extraFields, minLevel, maxLevel }: { ignoredTags: string[], extraFields: Array<string>, minLevel: number, maxLevel: number }) {
+function splitPageIntoSections<T extends Record<string, unknown>>(
+  page: SectionablePage & T, 
+  { ignoredTags, extraFields, minLevel, maxLevel }: { ignoredTags: string[], extraFields: Array<string>, minLevel: number, maxLevel: number }
+): Array<Section & T> {
   const body = (!page.body || page.body?.type === 'root') ? page.body : toHast(page.body as unknown as MinimarkTree) as MDCRoot
   const path = (page.path ?? '')
   const extraFieldsData = pick(extraFields)(page as unknown as Record<string, unknown>)
@@ -75,7 +74,7 @@ function splitPageIntoSections(page: SectionablePage, { ignoredTags, extraFields
   }]
 
   if (!body?.children) {
-    return sections
+    return sections as Array<Section & T>
   }
 
   let section = 1
@@ -121,7 +120,7 @@ function splitPageIntoSections(page: SectionablePage, { ignoredTags, extraFields
     }
   }
 
-  return sections
+  return sections as Array<Section & T>
 }
 
 function extractTextFromAst(node: MDCNode, ignoredTags: string[] = []) {
